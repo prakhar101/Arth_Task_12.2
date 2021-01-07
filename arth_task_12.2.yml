@@ -1,0 +1,78 @@
+- hosts : localhost
+  vars_files :
+          - "vars.yml"
+  tasks :
+  - name : launching an instance
+    ec2 :
+            key_name : "{{ key_name }}"
+            image : "{{ ami }}"
+            instance_type : "{{ instance_type }}"
+            count : "{{ num_web_server }}"
+            vpc_subnet_id : "{{ subnet_id }}"
+            group_id : "{{ security_group_id }}"
+            instance_tags :
+                    Name : webserver
+
+  - name : launching an instance
+    ec2 :
+            key_name : "{{ key_name }}"
+            image : "{{ ami }}"
+            instance_type : "{{ instance_type }}"
+            count : "{{ num_load_balancer }}"
+            vpc_subnet_id : "{{ subnet_id }}"
+            group_id : "{{ security_group_id }}"
+            instance_tags :
+                    Name : loadbalancer
+
+  - name :  pausing for 10
+    pause :
+            seconds : "20"
+
+  - name : refreshing the inventory 
+    meta : refresh_inventory
+
+
+- hosts : tag_Name_webserver
+  tasks :
+  - name : Installing the webserver program
+    package :
+            name : "httpd"
+            state : present
+
+  - name : Uploading the web pages
+    copy :
+            dest : "/var/www/html/index.html"
+            content : "This is the index.html of the  {{ ansible_facts.all_ipv4_addresses[0] }}"
+
+  - name : starting the service
+    service :
+            name : "httpd"
+            state : restarted
+
+
+- hosts : tag_Name_loadbalancer
+  tasks :
+  - name : Installing the haproxy
+    package :
+            name : "haproxy"
+            state : present
+
+  - name : configuring the haxproxy
+    template :
+            dest : "/etc/haproxy/haproxy.cfg"
+            src : "conf_file.cfg"
+
+    notify :
+            - "restart-service"
+
+  - name : Ensuring that the service has been started
+    service :
+            name : "haproxy"
+            state : started
+
+  handlers :
+  - name : restart-service
+    service :
+            name : "haproxy"
+            state : restarted
+
